@@ -4,15 +4,15 @@ import {
     Transaction, Keypair
 } from "@solana/web3.js";
 
-const PROGRAM_ID = new PublicKey("Your_Smart_Contract_Address"); // Replace with your deployed Rust contract address
-const NETWORK = "https://api.devnet.solana.com"; // Solana Devnet (or Mainnet if live)
+const PROGRAM_ID = new PublicKey("Your_Smart_Contract_Address"); 
+const NETWORK = "https://api.devnet.solana.com"; 
 const connection = new Connection(NETWORK);
 
 export const getAllTasks = async (): Promise<any[]> => {
   try {
     const accounts = await connection.getProgramAccounts(PROGRAM_ID);
     return accounts.map((account) => {
-      const data = account.account.data; // Raw data buffer
+      const data = account.account.data; 
       const decodedData = data.toString(); // Assuming UTF-8 encoded string
       const task = JSON.parse(decodedData); // Assuming tasks are JSON-encoded
       return {
@@ -59,7 +59,7 @@ export const deleteTask = async (
         { pubkey: new PublicKey(taskId), isSigner: false, isWritable: true }
       ],
       programId: PROGRAM_ID,
-      data: Buffer.from("delete") // Your smart contract must handle this instruction
+      data: Buffer.from("delete") 
     });
 
     const signature = await connection.sendTransaction(transaction, [payer]);
