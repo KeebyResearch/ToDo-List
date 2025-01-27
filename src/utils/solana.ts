@@ -1,20 +1,36 @@
 import {
-    Connection,
-    PublicKey,
-    Transaction, Keypair
+  Connection,
+  PublicKey,
+  Transaction,
+  Keypair, TransactionInstruction
 } from "@solana/web3.js";
+import { serialize } from "borsh";
 
-const PROGRAM_ID = new PublicKey("Your_Smart_Contract_Address"); 
-const NETWORK = "https://api.devnet.solana.com"; 
+const PROGRAM_ID = new PublicKey(
+  "program key dapat dito"
+);
+const NETWORK = "https://api.devnet.solana.com";
 const connection = new Connection(NETWORK);
+
+class CreateTaskInstruction {
+    constructor(properties: { [x: string]: any; title?: string; description?: string; }) {
+        Object.keys(properties).forEach((key) => {
+            this[key] = properties[key];
+        });
+    }
+}
+
+const CreateTaskSchema = new Map([
+    [CreateTaskInstruction, { kind: 'struct', fields: [['title', 'string'], ['description', 'string']] }]
+]);
 
 export const getAllTasks = async (): Promise<any[]> => {
   try {
     const accounts = await connection.getProgramAccounts(PROGRAM_ID);
     return accounts.map((account) => {
       const data = account.account.data; 
-      const decodedData = data.toString(); // Assuming UTF-8 encoded string
-      const task = JSON.parse(decodedData); // Assuming tasks are JSON-encoded
+      const decodedData = data.toString(); 
+      const task = JSON.parse(decodedData);
       return {
         id: account.pubkey.toBase58(),
         title: task.title,
@@ -28,25 +44,25 @@ export const getAllTasks = async (): Promise<any[]> => {
 };
 
 export const createTask = async (
-  title: string,
-  description: string,
-  payer: Keypair
+    title: string,
+    description: string,
+    payer: Keypair
 ): Promise<string> => {
-  try {
-    const instructionData = Buffer.from(JSON.stringify({ title, description })); // Encode data
-    const transaction = new Transaction().add({
-      keys: [{ pubkey: payer.publicKey, isSigner: true, isWritable: true }],
-      programId: PROGRAM_ID,
-      data: instructionData
-    });
+    try {
+        const instructionData = serialize(CreateTaskSchema, new CreateTaskInstruction({ title, description }));
+        const transaction = new Transaction().add(new TransactionInstruction({
+            keys: [{ pubkey: payer.publicKey, isSigner: true, isWritable: true }],
+            programId: PROGRAM_ID,
+            data: Buffer.from(instructionData)
+        }));
 
-    const signature = await connection.sendTransaction(transaction, [payer]);
-    await connection.confirmTransaction(signature);
-    return signature;
-  } catch (error) {
-    console.error("Error creating task:", error);
-    throw error;
-  }
+        const signature = await connection.sendTransaction(transaction, [payer]);
+        await connection.confirmTransaction(signature);
+        return signature;
+    } catch (error) {
+        console.error("Error creating task:", error);
+        throw error;
+    }
 };
 
 export const deleteTask = async (
