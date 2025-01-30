@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import TaskList from "../components/TaskList";
 import TaskForm from "../components/TaskForm";
-import {
-  getAllTasks,
-  createTask,
-  updateTask,
-  deleteTask
-} from "../utils/mockSolana";
+import { getAllTasks, createTask, updateTask, deleteTask } from "../utils/mockSolana";
+import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
+import { WalletModalProvider, WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { PhantomWalletAdapter, SolflareWalletAdapter, TorusWalletAdapter } from "@solana/wallet-adapter-wallets";
+
+import "@solana/wallet-adapter-react-ui/styles.css";
 
 type Task = {
   id: string;
@@ -17,15 +17,15 @@ type Task = {
 const Home = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Fetch all tasks on mount
+ 
   useEffect(() => {
     fetchTasks();
   }, []);
 
   const fetchTasks = async () => {
     const fetchedTasks = await getAllTasks();
-    console.log("Fetched tasks:", fetchedTasks); // Check if tasks are fetched correctly
-    setTasks(fetchedTasks); // Update state
+    console.log("Fetched tasks:", fetchedTasks); 
+    setTasks(fetchedTasks);
   };
 
   const handleCreate = async (title: string, description: string) => {
@@ -48,24 +48,41 @@ const Home = () => {
     await fetchTasks(); // Refresh tasks list after update
   };
 
+  // Define the wallet adapters
+  const wallets = useMemo(
+    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter(), new TorusWalletAdapter()],
+    []
+  );
+
   return (
-    <div className="container mt-5">
-      <h1 className="text-center mb-4">To-Do DApp</h1>
+    <ConnectionProvider endpoint="https://api.devnet.solana.com">
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <div className="container mt-5">
+            <h1 className="text-center mb-4">To-Do DApp</h1>
 
-      {/* Task Form */}
-      <div className="mb-5">
-        <TaskForm onSubmit={handleCreate} />
-      </div>
+            {/* Connect Wallet Button */}
+            <div className="d-flex justify-content-center mb-4">
+              <WalletMultiButton />
+            </div>
 
-      {/* Task List */}
-      <div>
-        <TaskList
-          tasks={tasks}
-          onDelete={handleDelete}
-          onUpdate={handleUpdate}
-        />
-      </div>
-    </div>
+            {/* Task Form */}
+            <div className="mb-5">
+              <TaskForm onSubmit={handleCreate} />
+            </div>
+
+            {/* Task List */}
+            <div>
+              <TaskList
+                tasks={tasks}
+                onDelete={handleDelete}
+                onUpdate={handleUpdate}
+              />
+            </div>
+          </div>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
   );
 };
 
