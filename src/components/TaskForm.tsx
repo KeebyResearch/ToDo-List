@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 
 type TaskFormProps = {
@@ -17,9 +16,13 @@ const TaskForm: React.FC<TaskFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(title, description);
-    setTitle("");
-    setDescription("");
+    if (title.trim() && description.trim()) {
+      onSubmit(title, description);
+      setTitle(""); // Clear title after submit
+      setDescription(""); // Clear description after submit
+    } else {
+      alert("Please fill in both title and description");
+    }
   };
 
   return (
