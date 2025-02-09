@@ -1,5 +1,5 @@
 import { Connection, Transaction, TransactionInstruction, PublicKey } from "@solana/web3.js";
-
+import { sha256 } from "js-sha256";
 
 const PROGRAM_ID = new PublicKey("FzPaC3CfaXQgwZBJgXpHWAHJXuzuaDQS6kghzH8fPHN3");
 
@@ -14,7 +14,19 @@ export const getConnection = (): Connection => {
   return connectionInstance;
 };
 
+const findTaskPDA = async (payer: PublicKey, taskId?: string): Promise<PublicKey> => {
+  let seed: Buffer;
 
+  if (taskId) {
+    seed = Buffer.from(sha256(taskId), "hex").slice(0, 32);
+  } else {
+    const timestampHash = Buffer.from(sha256(Date.now().toString()), "hex").slice(0, 16);
+    seed = Buffer.concat([payer.toBuffer().slice(0, 16), timestampHash]);
+  }
+
+  const [pda] = await PublicKey.findProgramAddress([seed], PROGRAM_ID);
+  return pda;
+};
 
 const sendAndConfirmTransaction = async (
   transaction: Transaction,
@@ -24,33 +36,20 @@ const sendAndConfirmTransaction = async (
   signTransaction?: (transaction: Transaction) => Promise<Transaction>
 ): Promise<string> => {
   try {
-    if (!connection) {
-      throw new Error("Solana connection is not initialized.");
-    }
-
-    if (!payer) {
-      throw new Error("Wallet not connected!");
-    }
+    if (!connection) throw new Error("Solana connection is not initialized.");
+    if (!payer) throw new Error("Wallet not connected!");
 
     transaction.feePayer = payer;
-
-    // Fetch latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
 
-    console.log("Transaction prepared:", transaction);
-
-    // Sign transaction 
     if (signTransaction) {
       transaction = await signTransaction(transaction);
     }
 
     const signature = await sendTransaction(transaction, connection);
-
-    // Confirm transaction
     await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
-    console.log("Transaction confirmed:", signature);
     return signature;
   } catch (error) {
     console.error("Transaction failed:", error);
@@ -58,9 +57,6 @@ const sendAndConfirmTransaction = async (
   }
 };
 
-
-
-// CREATE TASK
 export const createTask = async (
   title: string,
   description: string,
@@ -69,23 +65,23 @@ export const createTask = async (
   connection: Connection
 ): Promise<string> => {
   try {
-    if (!payer) {
-      throw new Error("Wallet not connected! Please connect your wallet.");
-    }
+    if (!payer) throw new Error("Wallet not connected!");
 
-    console.log("Creating task with payer:", payer.toBase58());
+    const pda = await findTaskPDA(payer);
+    const accountInfo = await connection.getAccountInfo(pda);
+    if (accountInfo) throw new Error("Task already exists with this PDA.");
 
     const instructionData = Buffer.from(JSON.stringify({ title, description }));
 
     const transaction = new Transaction().add(
       new TransactionInstruction({
-        keys: [{ pubkey: payer, isSigner: true, isWritable: true }],
+        keys: [{ pubkey: pda, isSigner: false, isWritable: true }],
         programId: PROGRAM_ID,
         data: instructionData
       })
     );
 
-    return await sendAndConfirmTransaction(transaction, connection, sendTransaction, payer); // ✅ Ensure payer is passed
+    return await sendAndConfirmTransaction(transaction, connection, sendTransaction, payer);
   } catch (error) {
     console.error("Error creating task:", error);
     throw new Error("Failed to create task.");
@@ -101,11 +97,13 @@ export const deleteTask = async (
   try {
     if (!payer) throw new Error("Wallet not connected!");
 
+    const pda = await findTaskPDA(payer, taskId);
+
     const instructionData = Buffer.from(JSON.stringify({ id: taskId, action: "delete" }));
 
     const transaction = new Transaction().add(
       new TransactionInstruction({
-        keys: [{ pubkey: new PublicKey(taskId), isSigner: false, isWritable: true }],
+        keys: [{ pubkey: pda, isSigner: false, isWritable: true }],
         programId: PROGRAM_ID,
         data: instructionData
       })
@@ -118,9 +116,6 @@ export const deleteTask = async (
   }
 };
 
-
-
-// UPDATE TASK
 export const updateTask = async (
   taskId: string,
   title: string,
@@ -132,32 +127,30 @@ export const updateTask = async (
   try {
     if (!payer) throw new Error("Wallet not connected!");
 
+    const pda = await findTaskPDA(payer, taskId);
+
     const instructionData = Buffer.from(JSON.stringify({ id: taskId, title, description }));
 
     const transaction = new Transaction().add(
       new TransactionInstruction({
-        keys: [{ pubkey: new PublicKey(taskId), isSigner: false, isWritable: true }],
+        keys: [{ pubkey: pda, isSigner: false, isWritable: true }],
         programId: PROGRAM_ID,
         data: instructionData
       })
     );
 
-    return await sendAndConfirmTransaction(transaction, connection, sendTransaction);
+    return await sendAndConfirmTransaction(transaction, connection, sendTransaction, payer);
   } catch (error) {
     console.error("Error updating task:", error);
     throw new Error("Failed to update task.");
   }
 };
 
-// FETCH ALL TASKS (Mocked for now)
 export const getAllTasks = async (publicKey: PublicKey): Promise<any[]> => {
   if (!publicKey) {
     console.error("Wallet not connected!");
     return [];
   }
-
-  console.log("Fetching tasks for:", publicKey.toBase58());
-
 
   return [
     { id: "task1", title: "Task 1", description: "Sample Task 1" },
